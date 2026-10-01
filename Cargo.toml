@@ -1,0 +1,54 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/vsql-types",
+    "crates/vsql-parser",
+    "crates/vsql-catalog",
+    "crates/vsql-storage",
+    "crates/vsql-executor",
+    "crates/vsql-protocol",
+    "crates/vsql-server",
+    "crates/vsql-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "Apache-2.0"
+repository = "https://github.com/velocitysql/velocitysql"
+description = "VelocitySQL - an in-memory, PostgreSQL-compatible SQL engine"
+
+[workspace.dependencies]
+vsql-types = { path = "crates/vsql-types" }
+vsql-parser = { path = "crates/vsql-parser" }
+vsql-catalog = { path = "crates/vsql-catalog" }
+vsql-storage = { path = "crates/vsql-storage" }
+vsql-executor = { path = "crates/vsql-executor" }
+vsql-protocol = { path = "crates/vsql-protocol" }
+
+anyhow = "1"
+thiserror = "2"
+base64 = "0.22"
+hmac = "0.12"
+parking_lot = "0.12"
+rand = "0.8"
+sha2 = "0.10"
+subtle = "2.6"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "macros", "signal", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"

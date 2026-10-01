@@ -1,0 +1,23 @@
+[package]
+name = "vsql-executor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "VelocitySQL planner and volcano executor"
+
+[dependencies]
+chrono = "0.4.44"
+parking_lot = "0.12.5"
+rust_decimal = "1.43.0"
+serde = { version = "1.0.229", features = ["derive"] }
+bincode = "1.3.3"
+thiserror = { workspace = true }
+
+vsql-catalog = { workspace = true }
+vsql-parser = { workspace = true }
+vsql-storage = { workspace = true }
+vsql-types = { workspace = true }
+
+[lints]
+workspace = true

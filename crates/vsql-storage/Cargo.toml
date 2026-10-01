@@ -1,0 +1,16 @@
+[package]
+name = "vsql-storage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "VelocitySQL in-memory storage engine: row store & indexes"
+
+[dependencies]
+parking_lot = "0.12.5"
+thiserror = { workspace = true }
+vsql-catalog = { workspace = true }
+vsql-types = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,23 @@
+[package]
+name = "vsql-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "VelocitySQL server: PostgreSQL wire protocol listener"
+
+[[bin]]
+name = "velocitysql-server"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+vsql-executor = { workspace = true }
+vsql-protocol = { workspace = true }
+
+[lints]
+workspace = true

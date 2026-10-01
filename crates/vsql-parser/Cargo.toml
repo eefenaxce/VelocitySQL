@@ -1,0 +1,17 @@
+[package]
+name = "vsql-parser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "VelocitySQL SQL front-end: PostgreSQL dialect parsing & AST"
+
+[dependencies]
+rust_decimal = "1.43.0"
+serde = { version = "1.0.229", features = ["derive"] }
+sqlparser = "0.63.0"
+thiserror = { workspace = true }
+vsql-types.workspace = true
+
+[lints]
+workspace = true
