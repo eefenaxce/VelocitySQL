@@ -59,6 +59,8 @@ config.dev.toml
 *.pid
 *.seed
 *.lock
+
+!Cargo.lock
 !.gitkeep
 
 docker-compose.override.yml

@@ -1,7 +1,7 @@
 # VelocitySQL
 
-[![CI](https://github.com/velocitysql/velocitysql/actions/workflows/ci.yml/badge.svg)](https://github.com/velocitysql/velocitysql/actions/workflows/ci.yml)
-[![coverage](https://codecov.io/gh/velocitysql/velocitysql/graph/badge.svg)](https://codecov.io/gh/velocitysql/velocitysql)
+[![CI](https://github.com/eefenaxce/VelocitySQL/actions/workflows/ci.yml/badge.svg)](https://github.com/eefenaxce/VelocitySQL/actions/workflows/ci.yml)
+[![coverage](https://codecov.io/gh/eefenaxce/VelocitySQL/graph/badge.svg)](https://codecov.io/gh/eefenaxce/VelocitySQL)
 
 An in-memory SQL engine that speaks the PostgreSQL wire protocol, written in Rust.
 
