@@ -186,7 +186,7 @@ fn lower_number(text: &str) -> Result<Value> {
 }
 
 fn decode_hex(text: &str) -> Result<Vec<u8>> {
-    if text.len() % 2 != 0 {
+    if !text.len().is_multiple_of(2) {
         return Err(ParserError::Invalid(format!(
             "invalid hexadecimal literal `{text}`"
         )));

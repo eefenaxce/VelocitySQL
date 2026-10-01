@@ -178,7 +178,7 @@ impl Database {
         // wrap the counter to `usize::MAX` and block every future `DROP`.
         let _ = self
             .sessions
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
                 Some(current.saturating_sub(1))
             });
     }
@@ -306,7 +306,7 @@ impl Engine {
     pub fn bump_next_oid(&self, at_least: Oid) {
         let _ = self
             .next_oid
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
                 Some(current.max(at_least))
             });
     }

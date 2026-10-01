@@ -549,7 +549,7 @@ fn redact_password(sql: &str) -> Cow<'_, str> {
         // Only a whole word: `my_password` is an identifier, not the clause.
         let before = sql[..start].chars().next_back();
         let after = sql[end..].chars().next();
-        let boundary = |c: Option<char>| c.map_or(true, |c| !c.is_alphanumeric() && c != '_');
+        let boundary = |c: Option<char>| c.is_none_or(|c| !c.is_alphanumeric() && c != '_');
         if !(boundary(before) && boundary(after)) {
             continue;
         }

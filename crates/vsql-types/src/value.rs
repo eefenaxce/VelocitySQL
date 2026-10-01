@@ -877,7 +877,7 @@ pub fn parse_timestamptz(s: &str) -> Result<DateTime<Utc>, TypeError> {
 fn parse_bytea(s: &str) -> Result<Vec<u8>, TypeError> {
     let s = s.trim();
     let hex = s.strip_prefix("\\x").unwrap_or(s);
-    if hex.len() % 2 != 0 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+    if !hex.len().is_multiple_of(2) || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
         return Err(invalid("bytea", s));
     }
     let mut out = Vec::with_capacity(hex.len() / 2);

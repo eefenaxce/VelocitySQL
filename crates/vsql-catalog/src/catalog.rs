@@ -91,7 +91,7 @@ impl Catalog {
     pub fn bump_next_oid(&self, at_least: Oid) {
         let _ = self
             .next_oid
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
                 if at_least > current {
                     Some(at_least)
                 } else {

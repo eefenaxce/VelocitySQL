@@ -1242,7 +1242,7 @@ impl Session {
             // Every stored row has to satisfy the constraint before it is added.
             let mut offending = false;
             table.for_each(|_, row| {
-                if row.get(ordinal).map_or(true, Value::is_null) {
+                if row.get(ordinal).is_none_or(Value::is_null) {
                     offending = true;
                     return false;
                 }
