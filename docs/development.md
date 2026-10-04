@@ -132,6 +132,66 @@ Something with real rows needs a `CatalogSource` variant and a materialiser. Bot
 belong in `pg_catalog.rs` with an assertion on the shape, because that is what a
 tool will do first.
 
+## Releasing
+
+`.github/workflows/release.yml` runs on a `v*` tag and on demand. It needs no
+secrets: the GitHub Release and the image both authenticate with the workflow's
+own `GITHUB_TOKEN`.
+
+```bash
+# 1. the version lives in one place, the workspace manifest
+$EDITOR Cargo.toml        # [workspace.package] version = "0.2.0"
+git commit -am "Release 0.2.0"
+git push
+
+# 2. the tag names the release, and has to agree with the manifest
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The workflow then:
+
+1. **verifies** — refuses the tag when it disagrees with `Cargo.toml`, then runs
+   the suite with `--locked`, so a release is never built from a red commit;
+2. **packages** — builds the release profile for `x86_64-unknown-linux-gnu` and
+   `x86_64-pc-windows-msvc` (the Windows build links the CRT statically, so the
+   archive runs on a machine without the MSVC redistributable);
+3. **publishes a GitHub Release** with both archives, a `SHA256SUMS` and notes
+   generated from the commits since the last tag;
+4. **pushes the image** to `ghcr.io/<owner>/<repo>`: the version, the minor series
+   and `latest` for a tag, `edge` for a manual run against a branch.
+
+Two things that bite once:
+
+- The image name is lowercased by the workflow, because an image reference may
+  not contain capitals and `github.repository` keeps them.
+- A GHCR package starts out **private** even when the repository is public. To let
+  people pull anonymously, set its visibility in the repository's package
+  settings after the first push.
+
+The image is `linux/amd64`. An arm64 image means building under emulation; add
+QEMU and `platforms: linux/amd64,linux/arm64` to the build step if that is wanted.
+
+### The Windows installer
+
+`installer/velocitysql.iss` builds the wizard the release carries. The Windows job
+compiles it from the binaries it just built, which is also how to do it by hand:
+
+```powershell
+choco install innosetup -y
+& 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' `
+    '/DAppVersion=0.1.0' '/DSourceDir=..\target\release' 'installer\velocitysql.iss'
+```
+
+It writes `dist/velocitysql-<version>-x86_64-pc-windows-msvc-setup.exe`.
+
+`installer/register-task.ps1` is what the installer runs to register the boot-time
+task, and what an administrator re-runs to move an existing installation to
+another port or binding. It uses `Register-ScheduledTask` rather than
+`schtasks /TR`, because the former takes the executable and its arguments as two
+separate values while the latter needs a quoted command line — and a quoted
+command line containing a path with spaces is where installers usually break.
+
 ## Comments
 
 Comments explain why a thing is the way it is, especially when the code looks odd

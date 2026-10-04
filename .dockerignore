@@ -1,0 +1,10 @@
+# The image is built from the manifests and the sources. Everything else is
+# either a build artifact of the host or documentation the compiler never sees.
+target/
+data/
+lcov.info
+
+.git/
+.github/
+docs/
+*.md

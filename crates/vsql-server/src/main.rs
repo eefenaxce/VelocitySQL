@@ -14,7 +14,7 @@
 //! `--init`/`--demo` still run first, but a snapshot now rebuilds the objects it
 //! created too, not just the rows. The full write-ahead log is milestone M2.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -59,6 +59,12 @@ struct Args {
     auth: String,
     /// `--superuser-password`: password of the bootstrap role.
     superuser_password: String,
+    /// `--snapshot-path`: where the snapshot is written and read back from.
+    ///
+    /// Defaults to `data/velocitysql.snapshot` relative to the working
+    /// directory, which is nobody's choice when the server is started at boot
+    /// by a service or a scheduled task.
+    snapshot_path: Option<PathBuf>,
     help: bool,
 }
 
@@ -86,6 +92,10 @@ impl Args {
                 }
                 "--init" => {
                     args.init = Some(argv.next().context("--init needs SQL text")?);
+                }
+                "--snapshot-path" => {
+                    let value = argv.next().context("--snapshot-path needs a path")?;
+                    args.snapshot_path = Some(PathBuf::from(value));
                 }
                 "--demo" => args.demo = true,
                 "--auth" => {
@@ -123,6 +133,8 @@ OPTIONS:
                                   [default: {default_password}]
     --demo                        Create the sample `users`/`orders` schema first
     --init <SQL>                  Run SQL before serving
+    --snapshot-path <PATH>        Where the snapshot is written
+                                  [default: data/velocitysql.snapshot]
     -h, --help                    Print this help
     -V, --version                 Print the version
 
@@ -198,7 +210,13 @@ async fn main() -> Result<()> {
     // Objects `--init`/`--demo` already created are left alone; a database,
     // role or view created at runtime is reinstalled. Durability is always on,
     // so this file is expected to exist after the first run.
-    let snapshot_path = PathBuf::from(persist::DEFAULT_SNAPSHOT_PATH);
+    let snapshot_path = args
+        .snapshot_path
+        .clone()
+        .unwrap_or_else(|| PathBuf::from(persist::DEFAULT_SNAPSHOT_PATH));
+    // A deployment points this at a directory of its own choosing, which on a
+    // first run does not exist yet.
+    prepare_snapshot_path(&snapshot_path)?;
     match persist::Snapshot::load(&snapshot_path) {
         Ok(Some(snapshot)) => {
             snapshot.restore(&engine);
@@ -293,4 +311,87 @@ fn run_script(engine: &Arc<Engine>, sql: &str) -> Result<()> {
         info!(tag = %result.tag(), "statement applied");
     }
     Ok(())
+}
+
+/// Makes sure the directory the snapshot lives in exists.
+///
+/// The built-in default sits next to the working directory, so its parent
+/// exists by construction. A deployment passes something under `ProgramData` or
+/// `/var/lib` instead, where the parent is not there on a first run: saying so at
+/// startup beats a background save that fails where nobody is looking.
+fn prepare_snapshot_path(path: &Path) -> Result<()> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    if parent.as_os_str().is_empty() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(parent).with_context(|| format!("cannot create {}", parent.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(arguments: &[&str]) -> Result<Args> {
+        Args::parse(arguments.iter().map(|argument| argument.to_string()))
+    }
+
+    #[test]
+    fn the_defaults_are_the_documented_ones() {
+        let args = parse(&[]).expect("no arguments");
+        assert_eq!(args.host, "127.0.0.1");
+        assert_eq!(args.port, 5210);
+        assert_eq!(args.auth, "scram-sha-256");
+        assert_eq!(args.superuser_password, DEFAULT_PASSWORD);
+        assert!(
+            args.snapshot_path.is_none(),
+            "without the flag the built-in path is used"
+        );
+    }
+
+    #[test]
+    fn the_snapshot_path_can_be_moved() {
+        // What an installer passes: a path under `ProgramData`, which no service
+        // or scheduled task ever has as its working directory.
+        let moved = r"C:\ProgramData\VelocitySQL\data\velocitysql.snapshot";
+        let args = parse(&["--snapshot-path", moved]).expect("a path");
+        assert_eq!(args.snapshot_path.as_deref(), Some(Path::new(moved)));
+    }
+
+    #[test]
+    fn flags_without_their_value_are_refused_by_name() {
+        for (arguments, expected) in [
+            (vec!["--snapshot-path"], "--snapshot-path needs a path"),
+            (vec!["--port"], "--port needs a value"),
+            (vec!["--host"], "--host needs a value"),
+        ] {
+            let error = parse(&arguments).expect_err("a value is required");
+            assert!(error.to_string().contains(expected), "{error}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_flag_is_refused() {
+        let error = parse(&["--nope"]).expect_err("unknown flag");
+        assert!(
+            error.to_string().contains("unrecognized argument"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_snapshot_directory_that_does_not_exist_is_created() {
+        let root = std::env::temp_dir().join("velocitysql-snapshot-path");
+        let _ = std::fs::remove_dir_all(&root);
+        let snapshot = root.join("nested").join("velocitysql.snapshot");
+
+        prepare_snapshot_path(&snapshot).expect("the parent is created");
+
+        assert!(snapshot.parent().expect("parent").is_dir());
+        // The default is a bare relative name, whose parent is the working
+        // directory and needs nothing done to it.
+        prepare_snapshot_path(Path::new("data/velocitysql.snapshot")).expect("the default path");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

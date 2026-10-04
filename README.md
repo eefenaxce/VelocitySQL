@@ -21,8 +21,9 @@ background task keeps a snapshot on disk so a restart does not lose them.
 
 240 unit and integration tests plus 4 doc-tests pass. CI runs on every push and
 pull request: `rustfmt`, `clippy -- -D warnings`, the test suite on Linux and
-Windows, `rustdoc` with warnings denied, and coverage. The commands to run them
-locally are in [docs/development.md](docs/development.md).
+Windows, `rustdoc` with warnings denied, and coverage. Pushing a `v*` tag
+publishes the archives and the container image. Both are described, with the
+commands to run them locally, in [docs/development.md](docs/development.md).
 
 ## Run it
 
@@ -52,6 +53,59 @@ The default password is documented (`velocitysql`) and the server prints a warni
 while it is in use; pass `--superuser-password` to change it. TLS is not
 implemented, so `SSLRequest` is answered with `'N'` and clients fall back to
 plaintext (see [docs/protocol.md](docs/protocol.md)).
+
+## Docker
+
+```bash
+docker run -d --name velocitysql \
+    -p 5210:5210 \
+    -v velocitysql-data:/data \
+    ghcr.io/eefenaxce/velocitysql \
+    --superuser-password 'TopSecret!'
+```
+
+The image is built from source, runs as an unprivileged user, and contains both
+`velocitysql-server` and `velocitysql-cli`. The snapshot is written to the
+`velocitysql-data` volume as `/data/velocitysql.snapshot`; without a volume it
+disappears with the container. Anything after the image name is passed to the
+server, and its own default of `127.0.0.1` is overridden by the entrypoint, which
+binds `0.0.0.0` — otherwise the port would only be reachable from inside the
+container. `linux/amd64` only, for now.
+
+Tags follow the release: `:0.1.0`, `:0.1` and `:latest`. A manual run of the
+release workflow against a branch pushes `:edge` instead.
+
+## Release archives
+
+Each [release](https://github.com/eefenaxce/VelocitySQL/releases) carries the same
+two binaries for Linux and Windows, with a `SHA256SUMS` beside them:
+
+```
+velocitysql-0.1.0-x86_64-unknown-linux-gnu.tar.gz
+velocitysql-0.1.0-x86_64-pc-windows-msvc.zip
+velocitysql-0.1.0-x86_64-pc-windows-msvc-setup.exe
+```
+
+The `setup.exe` is a wizard: it installs into `Program Files\VelocitySQL`, puts
+both binaries on the system `PATH`, gives the server a data directory under
+`%ProgramData%\VelocitySQL`, and can register a task that starts it at boot. It
+asks for the port, and whether the server should accept connections from other
+machines — off by default, which keeps the binding on `127.0.0.1`.
+
+Two things it deliberately does not do:
+
+- **A Windows service.** The service control manager only talks to a program that
+  implements its protocol, and answers a plain console program with error 1053.
+  The task that runs at startup as `SYSTEM` gives the same
+  up-before-anyone-logs-in behaviour without it. An administrator can re-run
+  `installer\register-task.ps1` later to change the port or the binding.
+- **Take the password.** A task's command line is readable by any local user, so
+  the password stays out of it: the server starts with the documented default and
+  you change it once with `velocitysql-cli -c "ALTER ROLE velocitysql PASSWORD
+  '...'"`, which the snapshot keeps.
+
+The task writes no log of its own — the server logs to stdout. Run it in a console
+window when you want to watch the statement log.
 
 ## Or use the built-in console
 

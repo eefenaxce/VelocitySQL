@@ -1,0 +1,63 @@
+name: installer
+
+# Builds the Windows installer (the `velocitysql-*-setup.exe` from
+# installer/velocitysql.iss) and uploads it as a downloadable artifact, so the
+# executable can be inspected without a release. The GitHub windows runner has
+# network access for `choco install innosetup`, which this sandbox does not.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "installer/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "testdata/**"
+      - "LICENSE"
+      - "README.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build the Windows binaries
+        run: cargo build --release --locked -p vsql-server -p vsql-cli
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile the installer
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          # An argument array, because PowerShell mangles quoted arguments on
+          # their way to a native executable.
+          $arguments = @(
+            "/DAppVersion=$version",
+            '/DSourceDir=..\target\release',
+            'installer\velocitysql.iss'
+          )
+          & $iscc @arguments
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: velocitysql-installer
+          path: dist/*-setup.exe
+          if-no-files-found: error
