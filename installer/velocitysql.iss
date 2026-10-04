@@ -17,7 +17,7 @@
 
 [Setup]
 ; The AppId identifies the installation across versions; it never changes.
-AppId={{7B3E5C2A-9D41-4E8B-A6F2-1C0D9B7E4A55}
+AppId={{7B3E5C2A-9D41-4E8B-A6F2-1C0D9B7E4A55}}
 AppName=VelocitySQL
 AppVersion={#AppVersion}
 AppVerName=VelocitySQL {#AppVersion}
@@ -172,8 +172,8 @@ begin
   else
     Host := '127.0.0.1';
   Parameters := Format('-NoProfile -ExecutionPolicy Bypass -File "%s" ' +
-    '-Exe "%s" -HostBinding %s -Port %d -Snapshot "%s" -TaskName "%s"',
-    [ExpandConstant('{app}\installer\register-task.ps1'),
+    '-Exe "%s" -HostBinding %s -Port %d -Snapshot "%s" -TaskName "%s"', [
+     ExpandConstant('{app}\installer\register-task.ps1'),
      ExpandConstant('{app}\bin\velocitysql-server.exe'), Host, ServerPort,
      SnapshotPath, TaskName]);
   if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
