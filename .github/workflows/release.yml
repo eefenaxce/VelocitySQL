@@ -1,0 +1,171 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # A manual run publishes the image with an `edge` tag and no release, because
+  # there is no tag to name one after.
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Read the workspace version
+        id: version
+        run: |
+          version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "workspace version: $version"
+      # A tag that disagrees with the manifest ships a `--version`, archives and
+      # an image tag that all name different releases.
+      - name: Check the tag against the workspace version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "$VERSION" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match the workspace version $VERSION" >&2
+            exit 1
+          fi
+      - run: cargo test --workspace --locked
+
+  binaries:
+    name: binaries (${{ matrix.target }})
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      # A binary that wants the MSVC redistributable fails on a machine that
+      # does not have it, so the Windows build links the CRT statically.
+      RUSTFLAGS: ${{ matrix.os == 'windows-latest' && '-C target-feature=+crt-static' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --locked -p vsql-server -p vsql-cli
+      - name: Package
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir -p dist
+          tar czf "dist/velocitysql-${VERSION}-${{ matrix.target }}.tar.gz" \
+            -C target/release velocitysql-server velocitysql-cli
+      - name: Package
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path target/release/velocitysql-server.exe, target/release/velocitysql-cli.exe `
+            -DestinationPath "dist/velocitysql-$env:VERSION-${{ matrix.target }}.zip"
+      - name: Installer
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          # An argument array, because PowerShell mangles quoted arguments on
+          # their way to a native executable.
+          $arguments = @(
+            "/DAppVersion=$env:VERSION",
+            '/DSourceDir=..\target\release',
+            'installer\velocitysql.iss'
+          )
+          & $iscc @arguments
+      - uses: actions/upload-artifact@v4
+        with:
+          name: velocitysql-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: release
+    needs: [verify, binaries]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+  docker:
+    name: docker image
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      # An image reference must be lowercase; `github.repository` keeps the
+      # repository's own capitalisation.
+      - name: Lowercase the image name
+        id: image
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ steps.image.outputs.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=edge
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # An arm64 image would have to be built under emulation; add
+          # `platforms: linux/amd64,linux/arm64` with QEMU if it is wanted.
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
