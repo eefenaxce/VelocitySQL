@@ -76,7 +76,7 @@ Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /F /TN ""VelocitySQL"""; \
 
 [Code]
 var
-  ConfigPage: TInputQueryPage;
+  ConfigPage: TInputQueryWizardPage;
   OptionsPage: TInputOptionWizardPage;
   ServerPort: Integer;
   AllowRemote: Boolean;
@@ -143,8 +143,8 @@ begin
   Result := True;
   if CurPageID = ConfigPage.ID then
   begin
-    if not TryStrToInt(ConfigPage.Values[0], ServerPort) or (ServerPort < 1) or
-       (ServerPort > 65535) then
+    ServerPort := StrToIntDef(ConfigPage.Values[0], 0);
+    if (ServerPort < 1) or (ServerPort > 65535) then
     begin
       MsgBox('The port has to be a number between 1 and 65535.', mbError, MB_OK);
       Result := False;
